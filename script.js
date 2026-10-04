@@ -48,6 +48,9 @@ const CONFIG = Object.freeze({
     return this.ticketPrice;
   }
 });
+emailjs.init({
+  publicKey: CONFIG.emailjs.publicKey
+});
 
 const DOM = {
   body: document.body,
@@ -248,13 +251,9 @@ async function handleRegistrationSubmit(event) {
     showSubmissionSuccess();
 
     showToast(
-      CONFIG.backendEndpoint === "YOUR_BACKEND_ENDPOINT"
-        ? "Testing mode: registration was not sent to a backend."
-        : "Your details are submitted.",
-      CONFIG.backendEndpoint === "YOUR_BACKEND_ENDPOINT"
-        ? "success"
-        : "success"
-    );
+  "Your details are submitted.",
+  "success"
+);
   } catch (error) {
     console.error("Registration submission error:", error);
 
@@ -474,122 +473,46 @@ function normalizeWhatsAppForBackend(value) {
 /* ---------------------------------------------------------
    Backend
 --------------------------------------------------------- */
-
 async function submitRegistration(payload) {
-  /*
-   * TESTING MODE
-   *
-   * We intentionally do not fake a successful backend request.
-   * The website continues to work visually and allows the UPI flow,
-   * but clearly tells the organizer that the backend is not connected.
-   */
-  if (CONFIG.backendEndpoint === "YOUR_BACKEND_ENDPOINT") {
+  try {
+    const templateParams = {
+      name: payload.name,
+      whatsapp: payload.whatsapp,
+      ticketPrice: payload.ticketPrice,
+      paymentStatus: payload.paymentStatus,
+      eventName: payload.eventName,
+      eventDate: payload.eventDate,
+      eventTime: payload.eventTime,
+      venue: payload.venue,
+      timestamp: payload.timestamp
+    };
+
+    const response = await emailjs.send(
+      CONFIG.emailjs.serviceId,
+      CONFIG.emailjs.templateId,
+      templateParams
+    );
+
+    if (!response || response.status !== 200) {
+      throw new Error(
+        "Registration could not be submitted. Please try again."
+      );
+    }
+
     return {
       success: true,
-      testingMode: true
+      data: response
     };
-  }
-
-  let response;
-
-  try {
-    response = await fetch(CONFIG.backendEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-  } catch (networkError) {
-    throw new Error(
-      "We could not reach the registration service. Please check your connection and try again."
-    );
-  }
-
-  let responseData = null;
-
-  try {
-    responseData = await response.json();
-  } catch {
-    /*
-     * A backend may return an empty response. The HTTP status is still
-     * authoritative for this frontend request.
-     */
-  }
-
-  if (!response.ok) {
-    const backendMessage =
-      responseData &&
-      typeof responseData.message === "string"
-        ? responseData.message
-        : "";
+  } catch (error) {
+    console.error("EmailJS registration error:", error);
 
     throw new Error(
-      backendMessage ||
-      `Registration could not be submitted (${response.status}). Please try again.`
+      "We could not submit your registration. Please try again."
     );
   }
-
-  return {
-    success: true,
-    data: responseData
-  };
 }
 
-/* ---------------------------------------------------------
-   Success State
---------------------------------------------------------- */
-
-function showSubmissionSuccess() {
-  DOM.registrationForm.hidden = true;
-  DOM.paymentSuccess.hidden = false;
-
-  DOM.paymentSuccess.scrollIntoView({
-    behavior: prefersReducedMotion() ? "auto" : "smooth",
-    block: "nearest"
-  });
-}
-
-/* ---------------------------------------------------------
-   UPI
---------------------------------------------------------- */
-
-function bindUPIPayment() {
-  if (!DOM.upiPaymentButton) {
-    return;
-  }
-
-  DOM.upiPaymentButton.addEventListener("click", openUPIPayment);
-}
-
-function generateUPIPaymentIntent() {
-  const amount = CONFIG.getTicketPrice();
-
-  /*
-   * URLSearchParams ensures that the payment intent is safely encoded.
-   * The resulting intent is equivalent to:
-   *
-   * upi://pay?pa=7082653911@ybl&pn=AESTHETICS%20STUDIO&am=999&cu=INR
-   */
-  const params = new URLSearchParams({
-    pa: CONFIG.upiId,
-    pn: CONFIG.payeeName,
-    am: String(amount),
-    cu: CONFIG.currency
-  });
-
-  return `upi://pay?${params.toString()}`;
-}
-
-function openUPIPayment() {
-  const upiIntent = generateUPIPaymentIntent();
-
-  /*
-   * The browser/device decides whether a UPI application can handle
-   * this custom URL scheme. No automatic payment verification is attempted.
-   */
-  try {
-    window.location.href = upiIntent;
+location.href = upiIntent;
   } catch (error) {
     console.error("Unable to open UPI intent:", error);
 
