@@ -19,6 +19,11 @@
 const CONFIG = Object.freeze({
   backendEndpoint: "YOUR_BACKEND_ENDPOINT",
 
+  emailjs: {
+  publicKey: "OE6ZjjxKYf1mSes4f",
+  serviceId: "service_gvif7q9",
+  templateId: "template_xszcfbg"
+},
   eventName: "MIDNIGHT 1000",
   eventDate: "17 October 2026",
   eventTime: "9 PM – 1 AM",
